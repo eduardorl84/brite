@@ -1,3 +1,2 @@
 anotaciones/*
-movie-app/
-movie-app/backend/*.pyc
+movie-app/backend/**/*.pyc

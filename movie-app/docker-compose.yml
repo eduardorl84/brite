@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=moviedb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: app/Dockerfile
+    env_file:
+      - backend/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/moviedb
+      - GOOGLE_CLOUD_PROJECT=your-project-id  # Add this line
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
