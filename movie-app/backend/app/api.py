@@ -69,7 +69,7 @@ async def get_movie_by_id(
         - session (AsyncSession): Sesión de base de datos
 
     Returns:
-    
+
         - MovieResponse: Datos de la película encontrada
 
     Raises:
@@ -145,24 +145,57 @@ async def create_movie(
     """
     # Buscar película por título
     search_result = await omdb_service.search_movies(movie.title)
+    print(f"Search result for '{movie.title}': {search_result}")  # Debug log
     
-    if not search_result or search_result.get("Response") == "False":
-        raise HTTPException(status_code=404, detail="Movie not found in OMDB")
+    if not search_result:
+        raise HTTPException(
+            status_code=404, 
+            detail="Error connecting to OMDB API"
+        )
     
-    # Tomar el primer resultado
-    first_movie = search_result["Search"][0]
+    if search_result.get("Response") == "False":
+        error_message = search_result.get("Error", "Movie not found in OMDB")
+        raise HTTPException(
+            status_code=404,
+            detail=error_message
+        )
+    
+    if "Search" not in search_result:
+        raise HTTPException(
+            status_code=404,
+            detail="Unexpected response format from OMDB"
+        )
+    
+    movies_found = search_result["Search"]
+    if not movies_found:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No movies found with title: {movie.title}"
+        )
+    
+    # Intentar encontrar una coincidencia exacta primero
+    exact_match = next(
+        (m for m in movies_found if m["Title"].lower() == movie.title.lower()),
+        movies_found[0]  # Si no hay coincidencia exacta, usar el primer resultado
+    )
     
     # Verificar si la película ya existe
     existing_movie = await session.execute(
-        select(Movie).where(Movie.imdb_id == first_movie["imdbID"])
+        select(Movie).where(Movie.imdb_id == exact_match["imdbID"])
     )
     if existing_movie.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Movie already exists in database")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Movie with IMDB ID {exact_match['imdbID']} already exists in database"
+        )
     
     # Obtener detalles completos
-    movie_details = await omdb_service.get_movie_details(first_movie["imdbID"])
+    movie_details = await omdb_service.get_movie_details(exact_match["imdbID"])
     if not movie_details:
-        raise HTTPException(status_code=404, detail="Could not fetch movie details")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not fetch details for movie: {exact_match['Title']}"
+        )
     
     # Crear película con datos completos
     db_movie = Movie(
