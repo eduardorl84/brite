@@ -18,12 +18,14 @@ async def list_movies(
     Lista todas las películas con paginación.
 
     Args:
-        skip (int): Número de registros a saltar (offset). Por defecto 0
-        limit (int): Límite de registros a devolver. Por defecto 10
-        session (AsyncSession): Sesión de base de datos
+
+        - skip (int): Número de registros a saltar (offset). Por defecto 0
+        - limit (int): Límite de registros a devolver. Por defecto 10
+        - session (AsyncSession): Sesión de base de datos
 
     Returns:
-        PaginatedResponse[MovieResponse]: Lista paginada de películas con total de registros
+
+        - PaginatedResponse[MovieResponse]: Lista paginada de películas con total de registros
     """
     query = select(Movie).offset(skip).limit(limit)
     result = await session.execute(query)
@@ -49,14 +51,14 @@ async def get_movie(
     Obtiene una película específica por su ID.
 
     Args:
-        movie_id (int): ID de la película a buscar
-        session (AsyncSession): Sesión de base de datos
+        - movie_id (int): ID de la película a buscar
+        - session (AsyncSession): Sesión de base de datos
 
     Returns:
-        MovieResponse: Datos de la película encontrada
+        - MovieResponse: Datos de la película encontrada
 
     Raises:
-        HTTPException: Si la película no se encuentra (404)
+        - HTTPException: Si la película no se encuentra (404)
     """
     query = select(Movie).where(Movie.id == movie_id)
     result = await session.execute(query)
@@ -76,13 +78,29 @@ async def create_movie(
     Crea una nueva película en la base de datos.
 
     Args:
-        movie (MovieCreate): Datos de la película a crear
-        session (AsyncSession): Sesión de base de datos
+        - movie (MovieCreate): Datos de la película a crear
+        - session (AsyncSession): Sesión de base de datos
 
     Returns:
-        Movie: Objeto de película creado con su ID asignado
+        - MovieResponse: Película creada con sus datos completos
+
+    Raises:
+        - HTTPException: Si la película no se encuentra en OMDB (404)
     """
-    db_movie = Movie.from_orm(movie)
+    # Obtener detalles completos de OMDB
+    movie_details = await omdb_service.get_movie_details(movie.imdb_id)
+    if not movie_details:
+        raise HTTPException(status_code=404, detail="Movie not found in OMDB")
+        
+    # Crear película con datos completos
+    db_movie = Movie(
+        title=movie_details.get("Title"),
+        year=movie_details.get("Year"),
+        imdb_id=movie_details.get("imdbID"),
+        plot=movie_details.get("Plot"),
+        poster=movie_details.get("Poster")
+    )
+    
     session.add(db_movie)
     await session.commit()
     await session.refresh(db_movie)
@@ -97,14 +115,14 @@ async def delete_movie(
     Elimina una película de la base de datos por su ID.
 
     Args:
-        movie_id (int): ID de la película a eliminar
-        session (AsyncSession): Sesión de base de datos
+        - movie_id (int): ID de la película a eliminar
+        - session (AsyncSession): Sesión de base de datos
 
     Returns:
-        dict: Mensaje de confirmación de eliminación
+        - dict: Mensaje de confirmación de eliminación
 
     Raises:
-        HTTPException: Si la película no se encuentra (404)
+        - HTTPException: Si la película no se encuentra (404)
     """
     query = select(Movie).where(Movie.id == movie_id)
     result = await session.execute(query)
