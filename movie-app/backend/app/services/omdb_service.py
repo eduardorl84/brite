@@ -1,3 +1,4 @@
+import os
 from typing import Optional, List, Dict
 import httpx
 import random
@@ -6,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import Movie
 from ..config import settings
 import aiohttp
+from functools import lru_cache
 
 class OMDBService:
-    def __init__(self):
-        self.api_key = settings.omdb_api_key
+    def __init__(self, api_key: str):
+        self.api_key = api_key
         self.base_url = "http://www.omdbapi.com/"
 
     async def search_movies(self, search_term: str, page: int = 1) -> Optional[dict]:
@@ -17,13 +19,13 @@ class OMDBService:
             try:
                 url = f"{self.base_url}/?apikey={self.api_key}&s={search_term}&page={page}"
                 print(f"Requesting: {url}")  # Debug log
-                
+
                 async with session.get(url) as response:
                     if response.status == 200:
                         return await response.json()
                     print(f"Error status: {response.status}")
                     return None
-                    
+
             except Exception as e:
                 print(f"Search request failed: {str(e)}")
                 return None
@@ -45,7 +47,7 @@ class OMDBService:
 
     async def fetch_initial_movies(self, session: AsyncSession) -> None:
         print("Starting initial movie fetch...")
-        
+
         result = await session.execute(select(Movie))
         movies = result.scalars().all()
         if movies:
@@ -54,7 +56,7 @@ class OMDBService:
 
         search_terms = ["Matrix", "Star Wars", "Lord", "Harry", "Avengers"]
         collected_movies = []
-        
+
         for term in search_terms:
             print(f"Searching for term: {term}")  # Debug log
             page = 1
@@ -64,14 +66,14 @@ class OMDBService:
                     if not search_result or "Search" not in search_result:
                         print(f"No results for {term} page {page}")  # Debug log
                         break
-                    
+
                     movies_found = search_result["Search"]
                     print(f"Found {len(movies_found)} movies for {term} page {page}")  # Debug log
-                    
+
                     for movie_data in movies_found:
                         if len(collected_movies) >= 100:
                             break
-                            
+
                         details = await self.get_movie_details(movie_data["imdbID"])
                         if details:
                             movie = Movie(
@@ -85,18 +87,18 @@ class OMDBService:
                             await session.flush()
                             collected_movies.append(movie)
                             print(f"Added movie: {details['Title']}")  # Debug log
-                            
-                            # Commit cada 10 películas
-                            if len(collected_movies) % 10 == 0:
-                                await session.commit()
-                                print(f"Committed batch of {len(collected_movies)} movies")  # Debug log
-                    
+
+                        # Commit cada 10 películas
+                        if len(collected_movies) % 10 == 0:
+                            await session.commit()
+                            print(f"Committed batch of {len(collected_movies)} movies")  # Debug log
+
                     page += 1
-                    
+
                 except Exception as e:
                     print(f"Error processing {term} page {page}: {str(e)}")  # Debug log
                     continue
-        
+
         try:
             await session.commit()
             print(f"Successfully loaded {len(collected_movies)} movies")
@@ -105,5 +107,12 @@ class OMDBService:
             print(f"Final commit error: {str(e)}")
             raise
 
-# Instancia global del servicio
-omdb_service = OMDBService()
+@lru_cache()
+def get_omdb_service() -> OMDBService:
+    api_key = settings.omdb_api_key
+    if not api_key:
+        raise ValueError("OMDB_API_KEY not configured in settings")
+    return OMDBService(api_key=api_key)
+
+# Crear una instancia global del servicio
+omdb_service = get_omdb_service()
