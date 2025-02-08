@@ -51,13 +51,16 @@ async def get_movie(
     Obtiene una película específica por su ID.
 
     Args:
+
         - movie_id (int): ID de la película a buscar
         - session (AsyncSession): Sesión de base de datos
 
     Returns:
+
         - MovieResponse: Datos de la película encontrada
 
     Raises:
+
         - HTTPException: Si la película no se encuentra (404)
     """
     query = select(Movie).where(Movie.id == movie_id)
@@ -78,13 +81,16 @@ async def create_movie(
     Crea una nueva película en la base de datos.
 
     Args:
+
         - movie (MovieCreate): Datos de la película a crear
         - session (AsyncSession): Sesión de base de datos
 
     Returns:
+
         - MovieResponse: Película creada con sus datos completos
 
     Raises:
+
         - HTTPException: Si la película no se encuentra en OMDB (404)
     """
     # Obtener detalles completos de OMDB
@@ -115,13 +121,16 @@ async def delete_movie(
     Elimina una película de la base de datos por su ID.
 
     Args:
+
         - movie_id (int): ID de la película a eliminar
         - session (AsyncSession): Sesión de base de datos
 
     Returns:
+
         - dict: Mensaje de confirmación de eliminación
 
     Raises:
+    
         - HTTPException: Si la película no se encuentra (404)
     """
     query = select(Movie).where(Movie.id == movie_id)
