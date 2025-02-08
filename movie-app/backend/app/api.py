@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from .database import get_session
-from .models import Movie, MovieResponse, PaginatedResponse, MovieCreate
+from .models import Movie, MovieResponse, PaginatedResponse, MovieCreate, User
 from .services.omdb_service import OMDBService, get_omdb_service
+from datetime import timedelta
+from fastapi.security import OAuth2PasswordRequestForm
+from .auth import get_current_user, authenticate_user, create_access_token, get_password_hash
+from .models import Token, UserCreate
+from .config import settings
 
 router = APIRouter()
 
@@ -212,17 +217,20 @@ async def create_movie(
     
     return db_movie
 
-@router.delete("/movies/{movie_id}")
+@router.delete("/movies/{movie_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_movie(
     movie_id: int,
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
     """
     Elimina una película de la base de datos por su ID.
+    Requiere autenticación.
 
     Args:
 
         - movie_id (int): ID de la película a eliminar
+        - current_user (User): Usuario autenticado
         - session (AsyncSession): Sesión de base de datos
 
     Returns:
@@ -230,16 +238,82 @@ async def delete_movie(
         - dict: Mensaje de confirmación de eliminación
 
     Raises:
-    
-        - HTTPException: Si la película no se encuentra (404)
+
+        HTTPException: 
+        
+            - 404 si la película no se encuentra
+            - 401 si el usuario no está autenticado
     """
     query = select(Movie).where(Movie.id == movie_id)
     result = await session.execute(query)
     movie = result.scalar_one_or_none()
-    
+
     if not movie:
-        raise HTTPException(status_code=404, detail="Movie not found")
-    
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Movie not found"
+        )
+
     await session.delete(movie)
     await session.commit()
-    return {"message": "Movie deleted successfully"}
+    
+    return None  # 204 No Content@router.post("/token", response_model=Token)
+
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session: AsyncSession = Depends(get_session)
+):
+    user = await authenticate_user(form_data.username, form_data.password, session)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/users/", response_model=dict)
+async def create_user(
+    user: UserCreate,
+    session: AsyncSession = Depends(get_session)
+):
+    # Verificar si el usuario ya existe
+    query = select(User).where(User.username == user.username)
+    result = await session.execute(query)
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail="Username already registered"
+        )
+    
+    # Crear nuevo usuario
+    db_user = User(
+        username=user.username,
+        hashed_password=get_password_hash(user.password)
+    )
+    session.add(db_user)
+    await session.commit()
+    
+    return {"message": "User created successfully"}
+
+@router.post("/token", response_model=Token)
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session: AsyncSession = Depends(get_session)
+):
+    user = await authenticate_user(form_data.username, form_data.password, session)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}

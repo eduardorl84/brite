@@ -12,11 +12,25 @@ class MovieBase(SQLModel):
 class Movie(MovieBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
-class MovieCreate(SQLModel):
-    title: str = Field(..., description="Título de la película a buscar")
+class MovieCreate(MovieBase):
+    pass
 
 class MovieResponse(MovieBase):
     id: int
+
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(unique=True, index=True)
+    hashed_password: str
+    is_active: bool = True
+
+class UserCreate(SQLModel):
+    username: str
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
 T = TypeVar("T")
 
