@@ -1,40 +1,52 @@
-# backend/app/api.py
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlmodel import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from .database import get_session
-from .models import Movie, MovieCreate, MovieResponse, PaginatedResponse
+from .models import Movie, MovieResponse, PaginatedResponse, MovieCreate
 from .services.omdb_service import OMDBService, get_omdb_service
 
 router = APIRouter()
 
 @router.get("/movies/", response_model=PaginatedResponse[MovieResponse])
 async def list_movies(
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(
+        default=0,
+        ge=0,
+        description="Número de registros a saltar"
+    ),
+    limit: int = Query(
+        default=10,
+        ge=1,
+        le=100,
+        description="Número de registros a retornar por página (máximo 100)"
+    ),
     session: AsyncSession = Depends(get_session)
 ):
     """
-    Lista todas las películas con paginación.
+    Lista todas las películas de la base de datos con paginación.
+    
+    Los resultados están ordenados por título alfabéticamente.
+    
+    Parámetros:
 
-    Args:
+        - skip: Número de registros a saltar (para paginación)
+        - limit: Número de registros a retornar (tamaño de página)
+    
+    Ejemplo de uso:
 
-        - skip (int): Número de registros a saltar (offset). Por defecto 0
-        - limit (int): Límite de registros a devolver. Por defecto 10
-        - session (AsyncSession): Sesión de base de datos
-
-    Returns:
-
-        - PaginatedResponse[MovieResponse]: Lista paginada de películas con total de registros
+        - Obtener primeras 10 películas: /movies/
+        - Obtener siguientes 10 películas: /movies/?skip=10
+        - Obtener 20 películas por página: /movies/?limit=20
     """
-    query = select(Movie).offset(skip).limit(limit)
+    # Consulta para obtener películas ordenadas por título
+    query = select(Movie).order_by(Movie.title).offset(skip).limit(limit)
     result = await session.execute(query)
     movies = result.scalars().all()
     
-    count_query = select(Movie)
-    count_result = await session.execute(count_query)
-    total = len(count_result.scalars().all())
+    # Consulta eficiente para el conteo total
+    count_query = select(func.count()).select_from(Movie)
+    total = await session.scalar(count_query)
     
     return PaginatedResponse(
         items=movies,
@@ -44,7 +56,7 @@ async def list_movies(
     )
 
 @router.get("/movies/{movie_id}", response_model=MovieResponse)
-async def get_movie(
+async def get_movie_by_id(
     movie_id: int,
     session: AsyncSession = Depends(get_session)
 ):
@@ -57,7 +69,7 @@ async def get_movie(
         - session (AsyncSession): Sesión de base de datos
 
     Returns:
-
+    
         - MovieResponse: Datos de la película encontrada
 
     Raises:
@@ -67,11 +79,46 @@ async def get_movie(
     query = select(Movie).where(Movie.id == movie_id)
     result = await session.execute(query)
     movie = result.scalar_one_or_none()
-    
+
     if not movie:
         raise HTTPException(status_code=404, detail="Movie not found")
-        
+
     return movie
+
+@router.get("/movies/title/{title}", response_model=MovieResponse)
+async def get_movie_by_title(
+    title: str,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Obtiene una película específica por su título.
+
+    Args:
+
+        - title (str): Título de la película a buscar
+        - session (AsyncSession): Sesión de base de datos
+
+    Returns:
+
+        - MovieResponse: Datos de la película encontrada
+
+    Raises:
+
+        - HTTPException: Si la película no se encuentra (404)
+    """
+    # Usamos ilike para hacer la búsqueda case-insensitive
+    query = select(Movie).where(Movie.title.ilike(f"%{title}%"))
+    result = await session.execute(query)
+    movies = result.scalars().all()
+
+    if not movies:
+        raise HTTPException(status_code=404, detail="No movies found with that title")
+    
+    # Si hay múltiples coincidencias, devolvemos la primera
+    if len(movies) > 1:
+        return movies[0]
+    
+    return movies[0]
 
 @router.post("/movies/", response_model=MovieResponse)
 async def create_movie(
