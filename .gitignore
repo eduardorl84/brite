@@ -1,2 +1,2 @@
-anotaciones/*
+anotaciones/**/*.pdf
 movie-app/backend/**/*.pyc
