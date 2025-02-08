@@ -5,27 +5,28 @@ from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import Movie
 from ..config import settings
+import aiohttp
 
 class OMDBService:
     def __init__(self):
         self.api_key = settings.omdb_api_key
         self.base_url = "http://www.omdbapi.com/"
 
-    async def search_movies(self, search_term: str, page: int) -> Optional[Dict]:
-        """Busca películas usando el parámetro de búsqueda y paginación."""
-        async with httpx.AsyncClient() as client:
-            params = {
-                "apikey": self.api_key,
-                "s": search_term,
-                "type": "movie",
-                "page": page
-            }
-            response = await client.get(self.base_url, params=params)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("Response") == "True":
-                    return data
-            return None
+    async def search_movies(self, search_term: str, page: int = 1) -> Optional[dict]:
+        async with aiohttp.ClientSession() as session:
+            try:
+                url = f"{self.base_url}/?apikey={self.api_key}&s={search_term}&page={page}"
+                print(f"Requesting: {url}")  # Debug log
+                
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    print(f"Error status: {response.status}")
+                    return None
+                    
+            except Exception as e:
+                print(f"Search request failed: {str(e)}")
+                return None
 
     async def get_movie_details(self, imdb_id: str) -> Optional[Dict]:
         """Obtiene los detalles completos de una película por su ID de IMDB."""
@@ -43,56 +44,66 @@ class OMDBService:
             return None
 
     async def fetch_initial_movies(self, session: AsyncSession) -> None:
-        """
-        Carga inicial de 100 películas si la base de datos está vacía.
-        Usa la búsqueda paginada para obtener películas que contengan 'e'.
-        """
-        # Verificar si la base de datos está vacía
-        query = select(Movie)
-        result = await session.execute(query)
-        if len(result.scalars().all()) > 0:
-            print("Database already populated, skipping initial load")
+        print("Starting initial movie fetch...")
+        
+        result = await session.execute(select(Movie))
+        movies = result.scalars().all()
+        if movies:
+            print(f"Found {len(movies)} existing movies")
             return
 
+        search_terms = ["Matrix", "Star Wars", "Lord", "Harry", "Avengers"]
         collected_movies = []
-        page = 1
-        # Necesitamos aproximadamente 10 páginas para obtener 100 películas
-        max_pages = 15  # Un poco más por si algunas películas fallan
-
-        while len(collected_movies) < 100 and page <= max_pages:
-            search_result = await self.search_movies("e", page)
-            if not search_result or "Search" not in search_result:
-                break
-
-            # Obtener detalles completos de cada película
-            for movie_basic in search_result["Search"]:
-                if len(collected_movies) >= 100:
-                    break
-
-                movie_details = await self.get_movie_details(movie_basic["imdbID"])
-                if movie_details:
-                    movie = Movie(
-                        title=movie_details.get("Title"),
-                        year=movie_details.get("Year"),
-                        imdb_id=movie_details.get("imdbID"),
-                        plot=movie_details.get("Plot"),
-                        poster=movie_details.get("Poster")
-                    )
-                    collected_movies.append(movie)
-                    print(f"Fetched movie: {movie.title}")
-
-            page += 1
-
-        # Mezclar aleatoriamente las películas y tomar 100
-        random.shuffle(collected_movies)
-        movies_to_add = collected_movies[:100]
-
-        # Guardar en la base de datos
-        for movie in movies_to_add:
-            session.add(movie)
-
-        await session.commit()
-        print(f"Successfully loaded {len(movies_to_add)} movies into the database")
+        
+        for term in search_terms:
+            print(f"Searching for term: {term}")  # Debug log
+            page = 1
+            while len(collected_movies) < 100 and page <= 5:
+                try:
+                    search_result = await self.search_movies(term, page)
+                    if not search_result or "Search" not in search_result:
+                        print(f"No results for {term} page {page}")  # Debug log
+                        break
+                    
+                    movies_found = search_result["Search"]
+                    print(f"Found {len(movies_found)} movies for {term} page {page}")  # Debug log
+                    
+                    for movie_data in movies_found:
+                        if len(collected_movies) >= 100:
+                            break
+                            
+                        details = await self.get_movie_details(movie_data["imdbID"])
+                        if details:
+                            movie = Movie(
+                                title=details["Title"],
+                                year=details["Year"],
+                                imdb_id=details["imdbID"],
+                                plot=details.get("Plot"),
+                                poster=details.get("Poster")
+                            )
+                            session.add(movie)
+                            await session.flush()
+                            collected_movies.append(movie)
+                            print(f"Added movie: {details['Title']}")  # Debug log
+                            
+                            # Commit cada 10 películas
+                            if len(collected_movies) % 10 == 0:
+                                await session.commit()
+                                print(f"Committed batch of {len(collected_movies)} movies")  # Debug log
+                    
+                    page += 1
+                    
+                except Exception as e:
+                    print(f"Error processing {term} page {page}: {str(e)}")  # Debug log
+                    continue
+        
+        try:
+            await session.commit()
+            print(f"Successfully loaded {len(collected_movies)} movies")
+        except Exception as e:
+            await session.rollback()
+            print(f"Final commit error: {str(e)}")
+            raise
 
 # Instancia global del servicio
 omdb_service = OMDBService()
