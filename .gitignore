@@ -1,6 +1,12 @@
+# Documentación
 anotaciones/**/*.pdf
-*.log
-# Añadir para ignorar todos los __pycache__
+
+# Python cache
 **/__pycache__/
 .pytest_cache/
+
+# Logs
+*.log
+
+# Coverage
 .coverage
