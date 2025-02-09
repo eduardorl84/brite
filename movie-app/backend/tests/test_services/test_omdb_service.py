@@ -12,65 +12,41 @@ from ..fixtures.mock_responses import (
 def omdb_service():
     return OMDBService(api_key="test_key")
 
-class MockResponse:
-    def __init__(self, status, data):
-        self.status = status
-        self._data = data
-
-    async def json(self):
-        return self._data
-
-class MockGet:
-    def __init__(self, response):
-        self.response = response
-
-    async def __aenter__(self):
-        return self.response
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        pass
-
-@pytest.fixture
-def mock_aiohttp_session(monkeypatch):
-    class MockSession:
-        def __init__(self, response):
-            self.response = response
-            
-        async def __aenter__(self):
-            return self
-            
-        async def __aexit__(self, exc_type, exc_val, exc_tb):
-            pass
-            
-        def get(self, url, **kwargs):
-            return MockGet(self.response)
-    
-    async def mock_session(*args, **kwargs):
-        return MockSession(MockResponse(200, MOCK_SEARCH_RESPONSE))
-    
-    monkeypatch.setattr(aiohttp, "ClientSession", mock_session)
-
 @pytest.mark.asyncio
-async def test_search_movies_success(omdb_service, mock_aiohttp_session):
-    result = await omdb_service.search_movies("Matrix")
+async def test_search_movies_success(omdb_service):
+    # Crear un mock de la respuesta
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json.return_value = MOCK_SEARCH_RESPONSE
+    
+    # Crear un mock de la sesión
+    mock_session = AsyncMock()
+    mock_session.__aenter__.return_value = mock_session
+    mock_session.get.return_value.__aenter__.return_value = mock_response
+    
+    with patch('aiohttp.ClientSession', return_value=mock_session):
+        result = await omdb_service.search_movies("Matrix")
+    
     assert result == MOCK_SEARCH_RESPONSE
     assert result["Search"][0]["Title"] == "The Matrix"
+    assert mock_session.get.called
 
 @pytest.mark.asyncio
-async def test_search_movies_error(omdb_service, monkeypatch):
-    async def mock_session(*args, **kwargs):
-        class MockSession:
-            async def __aenter__(self):
-                return self
-            async def __aexit__(self, *args):
-                pass
-            def get(self, *args, **kwargs):
-                return MockGet(MockResponse(404, None))
-        return MockSession()
+async def test_search_movies_error(omdb_service):
+    # Crear un mock de la respuesta con error
+    mock_response = AsyncMock()
+    mock_response.status = 404
     
-    monkeypatch.setattr(aiohttp, "ClientSession", mock_session)
-    result = await omdb_service.search_movies("NonExistentMovie")
+    # Crear un mock de la sesión
+    mock_session = AsyncMock()
+    mock_session.__aenter__.return_value = mock_session
+    mock_session.get.return_value.__aenter__.return_value = mock_response
+    
+    with patch('aiohttp.ClientSession', return_value=mock_session):
+        result = await omdb_service.search_movies("NonExistentMovie")
+    
     assert result is None
+    assert mock_session.get.called
 
 @pytest.mark.asyncio
 async def test_get_movie_details_success(omdb_service):
@@ -103,33 +79,25 @@ async def test_get_movie_details_not_found(omdb_service):
     assert result is None
 
 @pytest.mark.asyncio
-async def test_fetch_initial_movies_empty_db(omdb_service, test_session, monkeypatch):
-    # Mock para la sesión de aiohttp
-    async def mock_search_session(*args, **kwargs):
-        class MockSession:
-            async def __aenter__(self):
-                return self
-            async def __aexit__(self, *args):
-                pass
-            def get(self, *args, **kwargs):
-                return MockGet(MockResponse(200, MOCK_SEARCH_RESPONSE))
-        return MockSession()
+async def test_fetch_initial_movies_empty_db(omdb_service, test_session):
+    # Mock para search_movies
+    async def mock_search_movies(*args, **kwargs):
+        return MOCK_SEARCH_RESPONSE
     
-    # Mock para httpx
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = MOCK_MOVIE_DETAILS
-
-    mock_client = AsyncMock()
-    mock_client.__aenter__.return_value.get.return_value = mock_response
+    # Mock para get_movie_details
+    async def mock_get_movie_details(*args, **kwargs):
+        return MOCK_MOVIE_DETAILS
     
-    monkeypatch.setattr(aiohttp, "ClientSession", mock_search_session)
-    with patch('httpx.AsyncClient', return_value=mock_client):
+    # Aplicar los mocks
+    with patch.object(omdb_service, 'search_movies', mock_search_movies), \
+         patch.object(omdb_service, 'get_movie_details', mock_get_movie_details):
+        
         await omdb_service.fetch_initial_movies(test_session)
-
-    result = await test_session.execute("SELECT COUNT(*) FROM movie")
-    count = result.scalar()
-    assert count > 0
+        
+        # Verificar que se guardó al menos una película
+        result = await test_session.execute("SELECT COUNT(*) FROM movie")
+        count = result.scalar()
+        assert count > 0
 
 @pytest.mark.asyncio
 async def test_fetch_initial_movies_db_not_empty(omdb_service, test_session):
@@ -142,7 +110,8 @@ async def test_fetch_initial_movies_db_not_empty(omdb_service, test_session):
     
     # No necesitamos configurar mocks porque no deberían ser llamados
     await omdb_service.fetch_initial_movies(test_session)
-
+    
+    # Verificar que no se añadieron más películas
     result = await test_session.execute("SELECT COUNT(*) FROM movie")
     count = result.scalar()
     assert count == 1  # Solo debe existir la película que insertamos
