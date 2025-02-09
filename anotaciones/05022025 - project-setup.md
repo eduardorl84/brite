@@ -14,23 +14,56 @@
 ## Estructura del Proyecto
 
 ```
-movie-app/
-│
-├── backend/
-│   ├── app/
+.
+├── backend
+│   ├── app
+│   │   ├── api.py
+│   │   ├── auth.py
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── Dockerfile
 │   │   ├── __init__.py
-│   │   ├── main.py           # FastAPI app
-│   │   ├── models.py         # SQLModel models
-│   │   ├── database.py       # DB configuration
-│   │   ├── api.py            # API endpoints
-│   │   └── config.py         # Settings
-│   └── tests/
-│
-├── frontend/                  # Reflex app
-│   ├── pages/
-│   └── components/
-│
-└── docker-compose.yml
+│   │   ├── main.py
+│   │   ├── models.py
+│   │   ├── __pycache__
+│   │   │   ├── api.cpython-311.pyc
+│   │   │   ├── auth.cpython-311.pyc
+│   │   │   ├── config.cpython-311.pyc
+│   │   │   ├── database.cpython-311.pyc
+│   │   │   ├── __init__.cpython-311.pyc
+│   │   │   ├── main.cpython-311.pyc
+│   │   │   └── models.cpython-311.pyc
+│   │   └── services
+│   │       ├── __init__.py
+│   │       ├── omdb_service.py
+│   │       └── __pycache__
+│   │           ├── __init__.cpython-311.pyc
+│   │           ├── omdb.cpython-311.pyc
+│   │           └── omdb_service.cpython-311.pyc
+│   ├── logs
+│   │   └── movie_app.log
+│   ├── pytest.ini
+│   ├── requirements.txt
+│   └── tests
+│       ├── conftest.py
+│       ├── fixtures
+│       │   ├── __init__.py
+│       │   ├── mock_responses.py
+│       │   └── movie_data.py
+│       ├── __init__.py
+│       ├── test_api.py
+│       ├── test_auth.py
+│       ├── test_config.py
+│       ├── test_database.py
+│       ├── test_models.py
+│       └── test_services
+│           ├── __init__.py
+│           └── test_omdb_service.py
+├── docker-compose.yml
+└── frontend
+    ├── components
+    ├── pages
+    └── requirements.txt
 ```
 
 ## Configuración para Google Cloud Run
