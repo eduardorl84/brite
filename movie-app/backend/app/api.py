@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from .auth import get_current_user, authenticate_user, create_access_token, get_password_hash
 from .models import Token, UserCreate
 from .config import settings
+from loguru import logger
 
 # Definir los tags y su orden
 tags_metadata = [
@@ -170,7 +171,7 @@ async def create_movie(
     """
     # Buscar película por título
     search_result = await omdb_service.search_movies(movie.title)
-    print(f"Search result for '{movie.title}': {search_result}")
+    logger.info(f"Search result for '{movie.title}': {search_result}")
     
     if not search_result:
         raise HTTPException(

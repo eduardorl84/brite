@@ -8,6 +8,7 @@ from ..models import Movie
 from ..config import settings
 import aiohttp
 from functools import lru_cache
+from loguru import logger
 
 class OMDBService:
     def __init__(self, api_key: str):
@@ -18,16 +19,16 @@ class OMDBService:
         async with aiohttp.ClientSession() as session:
             try:
                 url = f"{self.base_url}/?apikey={self.api_key}&s={search_term}&page={page}"
-                print(f"Requesting: {url}")
+                logger.info(f"Requesting: {url}")
 
                 async with session.get(url) as response:
                     if response.status == 200:
                         return await response.json()
-                    print(f"Error status: {response.status}")
+                    logger.error(f"Error status: {response.status}")
                     return None
 
             except Exception as e:
-                print(f"Search request failed: {str(e)}")
+                logger.error(f"Search request failed: {str(e)}")
                 return None
 
     async def get_movie_details(self, imdb_id: str) -> Optional[Dict]:
@@ -46,29 +47,29 @@ class OMDBService:
             return None
 
     async def fetch_initial_movies(self, session: AsyncSession) -> None:
-        print("Starting initial movie fetch...")
+        logger.info("Starting initial movie fetch...")
 
         result = await session.execute(select(Movie))
         movies = result.scalars().all()
         if movies:
-            print(f"Found {len(movies)} existing movies")
+            logger.info(f"Found {len(movies)} existing movies")
             return
 
         search_terms = ["Matrix", "Star Wars", "Lord", "Harry", "Avengers"]
         collected_movies = []
 
         for term in search_terms:
-            print(f"Searching for term: {term}")
+            logger.info(f"Searching for term: {term}")
             page = 1
             while len(collected_movies) < 100 and page <= 5:
                 try:
                     search_result = await self.search_movies(term, page)
                     if not search_result or "Search" not in search_result:
-                        print(f"No results for {term} page {page}")
+                        logger.warning(f"No results for {term} page {page}")
                         break
 
                     movies_found = search_result["Search"]
-                    print(f"Found {len(movies_found)} movies for {term} page {page}")
+                    logger.info(f"Found {len(movies_found)} movies for {term} page {page}")
 
                     for movie_data in movies_found:
                         if len(collected_movies) >= 100:
@@ -86,25 +87,25 @@ class OMDBService:
                             session.add(movie)
                             await session.flush()
                             collected_movies.append(movie)
-                            print(f"Added movie: {details['Title']}")
+                            logger.info(f"Added movie: {details['Title']}")
 
                         # Commit cada 10 películas
                         if len(collected_movies) % 10 == 0:
                             await session.commit()
-                            print(f"Committed batch of {len(collected_movies)} movies")
+                            logger.info(f"Committed batch of {len(collected_movies)} movies")
 
                     page += 1
 
                 except Exception as e:
-                    print(f"Error processing {term} page {page}: {str(e)}")
+                    logger.error(f"Error processing {term} page {page}: {str(e)}")
                     continue
 
         try:
             await session.commit()
-            print(f"Successfully loaded {len(collected_movies)} movies")
+            logger.success(f"Successfully loaded {len(collected_movies)} movies")
         except Exception as e:
             await session.rollback()
-            print(f"Final commit error: {str(e)}")
+            logger.error(f"Final commit error: {str(e)}")
             raise
 
 @lru_cache()
