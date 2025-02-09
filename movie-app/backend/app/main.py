@@ -4,8 +4,12 @@ from .api import router
 from .database import create_db_and_tables, engine
 from sqlalchemy.ext.asyncio import AsyncSession
 from .services.omdb_service import get_omdb_service, omdb_service
+from .api import router, tags_metadata
 
-app = FastAPI(title="Movie API")
+app = FastAPI(
+    title="Movie API",
+    openapi_tags=tags_metadata
+)
 
 # Configurar CORS
 app.add_middleware(
