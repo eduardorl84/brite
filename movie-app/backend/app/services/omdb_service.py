@@ -1,14 +1,10 @@
-import os
-from typing import Optional, List, Dict
 import httpx
-import random
+from typing import Optional, Dict, List
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import Movie
-from ..config import settings
-import aiohttp
-from functools import lru_cache
 from loguru import logger
+from functools import lru_cache
 
 class OMDBService:
     def __init__(self, api_key: str):
@@ -16,23 +12,26 @@ class OMDBService:
         self.base_url = "http://www.omdbapi.com/"
 
     async def search_movies(self, search_term: str, page: int = 1) -> Optional[dict]:
-        async with aiohttp.ClientSession() as session:
-            try:
-                url = f"{self.base_url}/?apikey={self.api_key}&s={search_term}&page={page}"
-                logger.info(f"Requesting: {url}")
-
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    logger.error(f"Error status: {response.status}")
-                    return None
-
-            except Exception as e:
-                logger.error(f"Search request failed: {str(e)}")
+        params = {
+            "apikey": self.api_key,
+            "s": search_term,
+            "page": str(page)
+        }
+        logger.info(f"Requesting: {self.base_url}?apikey={self.api_key}&s={search_term}&page={page}")
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(self.base_url, params=params)
+                if response.status_code == 200:
+                    return response.json()
+                logger.error(f"Error status: {response.status_code}")
                 return None
+                
+        except Exception as e:
+            logger.error(f"Search request failed: {str(e)}")
+            return None
 
     async def get_movie_details(self, imdb_id: str) -> Optional[Dict]:
-        """Obtiene los detalles completos de una película por su ID de IMDB."""
         async with httpx.AsyncClient() as client:
             params = {
                 "apikey": self.api_key,
@@ -47,14 +46,17 @@ class OMDBService:
             return None
 
     async def fetch_initial_movies(self, session: AsyncSession) -> None:
+        """Cargar películas iniciales si la base de datos está vacía."""
         logger.info("Starting initial movie fetch...")
 
+        # Verificar si ya hay películas en la base de datos
         result = await session.execute(select(Movie))
         movies = result.scalars().all()
         if movies:
             logger.info(f"Found {len(movies)} existing movies")
             return
 
+        # Términos de búsqueda para obtener películas variadas
         search_terms = ["Matrix", "Star Wars", "Lord", "Harry", "Avengers"]
         collected_movies = []
 
@@ -110,6 +112,7 @@ class OMDBService:
 
 @lru_cache()
 def get_omdb_service() -> OMDBService:
+    from ..config import settings
     api_key = settings.omdb_api_key
     if not api_key:
         raise ValueError("OMDB_API_KEY not configured in settings")
