@@ -1,3 +1,6 @@
 anotaciones/**/*.pdf
-movie-app/backend/**/*.pyc
 *.log
+# Añadir para ignorar todos los __pycache__
+**/__pycache__/
+.pytest_cache/
+.coverage
