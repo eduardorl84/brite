@@ -16,12 +16,7 @@ from app.services.omdb_service import OMDBService, get_omdb_service
 # Configuración de la base de datos de prueba
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator:
-    """Create an instance of the default event loop for each test case."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+# Removed event_loop fixture to use pytest-asyncio's default implementation
 
 @pytest.fixture(scope="session")
 async def test_engine():
