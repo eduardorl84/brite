@@ -4,7 +4,6 @@ from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import Movie
 from loguru import logger
-from functools import lru_cache
 
 class OMDBService:
     def __init__(self, api_key: str):
@@ -56,61 +55,35 @@ class OMDBService:
             logger.info(f"Found {len(movies)} existing movies")
             return
 
-        # Términos de búsqueda para obtener películas variadas
-        search_terms = ["Matrix", "Star Wars", "Lord", "Harry", "Avengers"]
+        search_terms = ["Matrix"]  # Simplificado para pruebas
         collected_movies = []
 
         for term in search_terms:
             logger.info(f"Searching for term: {term}")
-            page = 1
-            while len(collected_movies) < 100 and page <= 5:
-                try:
-                    search_result = await self.search_movies(term, page)
-                    if not search_result or "Search" not in search_result:
-                        logger.warning(f"No results for {term} page {page}")
-                        break
+            search_result = await self.search_movies(term, page=1)
+            
+            if not search_result or "Search" not in search_result:
+                logger.warning(f"No results for {term}")
+                continue
 
-                    movies_found = search_result["Search"]
-                    logger.info(f"Found {len(movies_found)} movies for {term} page {page}")
+            movies_found = search_result["Search"]
+            for movie_data in movies_found[:1]:  # Solo procesar la primera película
+                details = await self.get_movie_details(movie_data["imdbID"])
+                if details:
+                    movie = Movie(
+                        title=details["Title"],
+                        year=details["Year"],
+                        imdb_id=details["imdbID"],
+                        plot=details.get("Plot"),
+                        poster=details.get("Poster")
+                    )
+                    session.add(movie)
+                    await session.commit()
+                    collected_movies.append(movie)
+                    break  # Salir después de la primera película
 
-                    for movie_data in movies_found:
-                        if len(collected_movies) >= 100:
-                            break
+        logger.info(f"Successfully loaded {len(collected_movies)} movies")
 
-                        details = await self.get_movie_details(movie_data["imdbID"])
-                        if details:
-                            movie = Movie(
-                                title=details["Title"],
-                                year=details["Year"],
-                                imdb_id=details["imdbID"],
-                                plot=details.get("Plot"),
-                                poster=details.get("Poster")
-                            )
-                            session.add(movie)
-                            await session.flush()
-                            collected_movies.append(movie)
-                            logger.info(f"Added movie: {details['Title']}")
-
-                        # Commit cada 10 películas
-                        if len(collected_movies) % 10 == 0:
-                            await session.commit()
-                            logger.info(f"Committed batch of {len(collected_movies)} movies")
-
-                    page += 1
-
-                except Exception as e:
-                    logger.error(f"Error processing {term} page {page}: {str(e)}")
-                    continue
-
-        try:
-            await session.commit()
-            logger.success(f"Successfully loaded {len(collected_movies)} movies")
-        except Exception as e:
-            await session.rollback()
-            logger.error(f"Final commit error: {str(e)}")
-            raise
-
-@lru_cache()
 def get_omdb_service() -> OMDBService:
     from ..config import settings
     api_key = settings.omdb_api_key
