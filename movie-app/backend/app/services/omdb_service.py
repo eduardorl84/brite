@@ -18,7 +18,7 @@ class OMDBService:
         async with aiohttp.ClientSession() as session:
             try:
                 url = f"{self.base_url}/?apikey={self.api_key}&s={search_term}&page={page}"
-                print(f"Requesting: {url}")  # Debug log
+                print(f"Requesting: {url}")
 
                 async with session.get(url) as response:
                     if response.status == 200:
@@ -58,17 +58,17 @@ class OMDBService:
         collected_movies = []
 
         for term in search_terms:
-            print(f"Searching for term: {term}")  # Debug log
+            print(f"Searching for term: {term}")
             page = 1
             while len(collected_movies) < 100 and page <= 5:
                 try:
                     search_result = await self.search_movies(term, page)
                     if not search_result or "Search" not in search_result:
-                        print(f"No results for {term} page {page}")  # Debug log
+                        print(f"No results for {term} page {page}")
                         break
 
                     movies_found = search_result["Search"]
-                    print(f"Found {len(movies_found)} movies for {term} page {page}")  # Debug log
+                    print(f"Found {len(movies_found)} movies for {term} page {page}")
 
                     for movie_data in movies_found:
                         if len(collected_movies) >= 100:
@@ -86,17 +86,17 @@ class OMDBService:
                             session.add(movie)
                             await session.flush()
                             collected_movies.append(movie)
-                            print(f"Added movie: {details['Title']}")  # Debug log
+                            print(f"Added movie: {details['Title']}")
 
                         # Commit cada 10 películas
                         if len(collected_movies) % 10 == 0:
                             await session.commit()
-                            print(f"Committed batch of {len(collected_movies)} movies")  # Debug log
+                            print(f"Committed batch of {len(collected_movies)} movies")
 
                     page += 1
 
                 except Exception as e:
-                    print(f"Error processing {term} page {page}: {str(e)}")  # Debug log
+                    print(f"Error processing {term} page {page}: {str(e)}")
                     continue
 
         try:

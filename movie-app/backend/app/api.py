@@ -170,7 +170,7 @@ async def create_movie(
     """
     # Buscar película por título
     search_result = await omdb_service.search_movies(movie.title)
-    print(f"Search result for '{movie.title}': {search_result}")  # Debug log
+    print(f"Search result for '{movie.title}': {search_result}")
     
     if not search_result:
         raise HTTPException(
@@ -277,30 +277,32 @@ async def delete_movie(
     await session.delete(movie)
     await session.commit()
     
-    return None  # 204 No Content@router.post("/token", response_model=Token)
-
-async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    session: AsyncSession = Depends(get_session)
-):
-    user = await authenticate_user(form_data.username, form_data.password, session)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-    access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return None
 
 @router.post("/users/", response_model=dict, tags=["auth"])
 async def create_user(
     user: UserCreate,
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    Crea un nuevo usuario en el sistema.
+    Verifica que el nombre de usuario no exista previamente.
+
+    Args:
+
+        - user (UserCreate): Datos del usuario (username y password)
+        - session (AsyncSession): Sesión de base de datos
+
+    Returns:
+
+        - dict: Mensaje de confirmación de creación del usuario
+
+    Raises:
+
+        HTTPException:
+        
+            - 400 si el nombre de usuario ya está registrado
+    """
     # Verificar si el usuario ya existe
     query = select(User).where(User.username == user.username)
     result = await session.execute(query)
@@ -325,6 +327,25 @@ async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: AsyncSession = Depends(get_session)
 ):
+    """
+    Genera un token de acceso JWT para autenticación.
+    Valida las credenciales del usuario.
+
+    Args:
+
+        - form_data (OAuth2PasswordRequestForm): Credenciales del usuario (username y password)
+        - session (AsyncSession): Sesión de base de datos
+
+    Returns:
+
+        - Token: Token de acceso JWT y tipo de token
+
+    Raises:
+
+        HTTPException:
+        
+            - 401 si las credenciales son incorrectas
+    """
     user = await authenticate_user(form_data.username, form_data.password, session)
     if not user:
         raise HTTPException(
