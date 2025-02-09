@@ -11,9 +11,29 @@ from .auth import get_current_user, authenticate_user, create_access_token, get_
 from .models import Token, UserCreate
 from .config import settings
 
+# Definir los tags y su orden
+tags_metadata = [
+    {
+        "name": "read",
+        "description": "Operaciones de lectura de películas"
+    },
+    {
+        "name": "write",
+        "description": "Operaciones de escritura de películas"
+    },
+    {
+        "name": "delete",
+        "description": "Operaciones de eliminación de películas"
+    },
+    {
+        "name": "auth",
+        "description": "Operaciones de autenticación"
+    }
+]
+
 router = APIRouter()
 
-@router.get("/movies/", response_model=PaginatedResponse[MovieResponse])
+@router.get("/movies/", response_model=PaginatedResponse[MovieResponse], tags=["read"])
 async def list_movies(
     skip: int = Query(
         default=0,
@@ -60,7 +80,7 @@ async def list_movies(
         limit=limit
     )
 
-@router.get("/movies/{movie_id}", response_model=MovieResponse)
+@router.get("/movies/{movie_id}", response_model=MovieResponse, tags=["read"])
 async def get_movie_by_id(
     movie_id: int,
     session: AsyncSession = Depends(get_session)
@@ -90,7 +110,7 @@ async def get_movie_by_id(
 
     return movie
 
-@router.get("/movies/title/{title}", response_model=MovieResponse)
+@router.get("/movies/title/{title}", response_model=MovieResponse, tags=["read"])
 async def get_movie_by_title(
     title: str,
     session: AsyncSession = Depends(get_session)
@@ -125,7 +145,7 @@ async def get_movie_by_title(
     
     return movies[0]
 
-@router.post("/movies/", response_model=MovieResponse)
+@router.post("/movies/", response_model=MovieResponse, tags=["write"])
 async def create_movie(
     movie: MovieCreate,
     session: AsyncSession = Depends(get_session),
@@ -217,7 +237,7 @@ async def create_movie(
     
     return db_movie
 
-@router.delete("/movies/{movie_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/movies/{movie_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["delete"])
 async def delete_movie(
     movie_id: int,
     current_user: User = Depends(get_current_user),
@@ -276,7 +296,7 @@ async def login_for_access_token(
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.post("/users/", response_model=dict)
+@router.post("/users/", response_model=dict, tags=["auth"])
 async def create_user(
     user: UserCreate,
     session: AsyncSession = Depends(get_session)
@@ -300,7 +320,7 @@ async def create_user(
     
     return {"message": "User created successfully"}
 
-@router.post("/token", response_model=Token)
+@router.post("/token", response_model=Token, tags=["auth"])
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: AsyncSession = Depends(get_session)
