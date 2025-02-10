@@ -55,34 +55,76 @@ class OMDBService:
             logger.info(f"Found {len(movies)} existing movies")
             return
 
-        search_terms = ["Matrix"]  # Simplificado para pruebas
+        # Términos de búsqueda para obtener películas variadas
+        search_terms = ["Matrix", "Star Wars", "Lord", "Harry", "Avengers"]
         collected_movies = []
 
         for term in search_terms:
             logger.info(f"Searching for term: {term}")
-            search_result = await self.search_movies(term, page=1)
+            page = 1
             
-            if not search_result or "Search" not in search_result:
-                logger.warning(f"No results for {term}")
-                continue
+            while len(collected_movies) < 100 and page <= 5:
+                try:
+                    search_result = await self.search_movies(term, page)
+                    if not search_result or "Search" not in search_result:
+                        logger.warning(f"No results for {term} page {page}")
+                        break
 
-            movies_found = search_result["Search"]
-            for movie_data in movies_found[:1]:  # Solo procesar la primera película
-                details = await self.get_movie_details(movie_data["imdbID"])
-                if details:
-                    movie = Movie(
-                        title=details["Title"],
-                        year=details["Year"],
-                        imdb_id=details["imdbID"],
-                        plot=details.get("Plot"),
-                        poster=details.get("Poster")
-                    )
-                    session.add(movie)
-                    await session.commit()
-                    collected_movies.append(movie)
-                    break  # Salir después de la primera película
+                    movies_found = search_result["Search"]
+                    logger.info(f"Found {len(movies_found)} movies for {term} page {page}")
 
-        logger.info(f"Successfully loaded {len(collected_movies)} movies")
+                    for movie_data in movies_found:
+                        if len(collected_movies) >= 100:
+                            break
+
+                        try:
+                            # Verificar si la película ya existe
+                            existing_movie = await session.execute(
+                                select(Movie).where(Movie.imdb_id == movie_data["imdbID"])
+                            )
+                            if existing_movie.scalar_one_or_none():
+                                logger.debug(f"Movie {movie_data['imdbID']} already exists, skipping")
+                                continue
+
+                            details = await self.get_movie_details(movie_data["imdbID"])
+                            if details:
+                                movie = Movie(
+                                    title=details["Title"],
+                                    year=details["Year"],
+                                    imdb_id=details["imdbID"],
+                                    plot=details.get("Plot"),
+                                    poster=details.get("Poster")
+                                )
+                                session.add(movie)
+                                await session.flush()
+                                collected_movies.append(movie)
+                                logger.info(f"Added movie: {details['Title']}")
+
+                                # Commit cada 10 películas
+                                if len(collected_movies) % 10 == 0:
+                                    await session.commit()
+                                    logger.info(f"Committed batch of {len(collected_movies)} movies")
+
+                        except Exception as e:
+                            logger.error(f"Error processing movie {movie_data.get('imdbID')}: {str(e)}")
+                            continue
+
+                    page += 1
+
+                except Exception as e:
+                    logger.error(f"Error processing {term} page {page}: {str(e)}")
+                    continue
+
+        try:
+            if collected_movies:
+                await session.commit()
+                logger.success(f"Successfully loaded {len(collected_movies)} movies")
+            else:
+                logger.warning("No movies were collected")
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"Final commit error: {str(e)}")
+            raise
 
 def get_omdb_service() -> OMDBService:
     from ..config import settings
