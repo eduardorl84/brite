@@ -130,7 +130,9 @@ async def test_create_movie(client: AsyncClient, test_session, monkeypatch):
                 "imdbID": "tt8888888",
                 "Type": "movie",
                 "Poster": "test.jpg"
-            }]
+            }],
+            "totalResults": "1",
+            "Response": "True"
         }
 
     async def mock_get_movie_details(*args, **kwargs):
@@ -139,7 +141,8 @@ async def test_create_movie(client: AsyncClient, test_session, monkeypatch):
             "Year": "2024",
             "imdbID": "tt8888888",
             "Plot": "Test plot",
-            "Poster": "test.jpg"
+            "Poster": "test.jpg",
+            "Response": "True"
         }
 
     # Aplicar los mocks
@@ -147,15 +150,24 @@ async def test_create_movie(client: AsyncClient, test_session, monkeypatch):
     monkeypatch.setattr(OMDBService, "search_movies", mock_search_movies)
     monkeypatch.setattr(OMDBService, "get_movie_details", mock_get_movie_details)
 
+    # Solo enviamos el título como lo haría un cliente real
     response = await client.post(
         "/api/v1/movies/",
         json={"title": "New Test Movie"}
     )
+    
+    if response.status_code != 200:
+        print("Response error:", response.json())
+        
     assert response.status_code == 200
     
     data = response.json()
+    # Verificamos que la respuesta contenga todos los datos que debería haber obtenido de OMDB
     assert data["title"] == "New Test Movie"
+    assert data["year"] == "2024"
     assert data["imdb_id"] == "tt8888888"
+    assert data["plot"] == "Test plot"
+    assert data["poster"] == "test.jpg"
 
 @pytest.mark.asyncio
 async def test_delete_movie_unauthorized(client: AsyncClient, test_movie: Movie):

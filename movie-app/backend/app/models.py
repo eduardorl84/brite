@@ -12,8 +12,9 @@ class MovieBase(SQLModel):
 class Movie(MovieBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
-class MovieCreate(MovieBase):
-    pass
+class MovieCreate(SQLModel):
+    """Modelo para crear una nueva película solo con el título."""
+    title: str
 
 class MovieResponse(MovieBase):
     id: int

@@ -146,75 +146,53 @@ async def get_movie_by_title(
     
     return movies[0]
 
-@router.post("/movies/", response_model=MovieResponse, tags=["write"])
+@router.post("/movies/", response_model=MovieResponse)
 async def create_movie(
     movie: MovieCreate,
     session: AsyncSession = Depends(get_session),
     omdb_service: OMDBService = Depends(get_omdb_service)
 ):
-    """
-    Crea una nueva película en la base de datos.
-    
-    Args:
-
-        - movie (MovieCreate): Datos de la película (título)
-        - session (AsyncSession): Sesión de base de datos
-        - omdb_service (OMDBService): Servicio de OMDB
-    
-    Returns:
-
-        - MovieResponse: Película creada con sus datos completos
-    
-    Raises:
-
-        - HTTPException: Si la película no se encuentra en OMDB (404) o si ya existe en la base de datos (400)
-    """
+    """Crear una nueva película buscando sus datos en OMDB."""
     # Buscar película por título
     search_result = await omdb_service.search_movies(movie.title)
     logger.info(f"Search result for '{movie.title}': {search_result}")
-    
+
     if not search_result:
         raise HTTPException(
-            status_code=404, 
+            status_code=404,
             detail="Error connecting to OMDB API"
         )
-    
+
     if search_result.get("Response") == "False":
         error_message = search_result.get("Error", "Movie not found in OMDB")
         raise HTTPException(
             status_code=404,
             detail=error_message
         )
-    
-    if "Search" not in search_result:
-        raise HTTPException(
-            status_code=404,
-            detail="Unexpected response format from OMDB"
-        )
-    
-    movies_found = search_result["Search"]
+
+    movies_found = search_result.get("Search", [])
     if not movies_found:
         raise HTTPException(
             status_code=404,
             detail=f"No movies found with title: {movie.title}"
         )
-    
+
     # Intentar encontrar una coincidencia exacta primero
     exact_match = next(
         (m for m in movies_found if m["Title"].lower() == movie.title.lower()),
         movies_found[0]  # Si no hay coincidencia exacta, usar el primer resultado
     )
-    
+
     # Verificar si la película ya existe
     existing_movie = await session.execute(
         select(Movie).where(Movie.imdb_id == exact_match["imdbID"])
     )
     if existing_movie.scalar_one_or_none():
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=f"Movie with IMDB ID {exact_match['imdbID']} already exists in database"
         )
-    
+
     # Obtener detalles completos
     movie_details = await omdb_service.get_movie_details(exact_match["imdbID"])
     if not movie_details:
@@ -222,7 +200,7 @@ async def create_movie(
             status_code=404,
             detail=f"Could not fetch details for movie: {exact_match['Title']}"
         )
-    
+
     # Crear película con datos completos
     db_movie = Movie(
         title=movie_details["Title"],
@@ -231,11 +209,11 @@ async def create_movie(
         plot=movie_details.get("Plot"),
         poster=movie_details.get("Poster")
     )
-    
+
     session.add(db_movie)
     await session.commit()
     await session.refresh(db_movie)
-    
+
     return db_movie
 
 @router.delete("/movies/{movie_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["delete"])
