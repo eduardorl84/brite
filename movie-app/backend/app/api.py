@@ -146,7 +146,7 @@ async def get_movie_by_title(
     
     return movies[0]
 
-@router.post("/movies/", response_model=MovieResponse)
+@router.post("/movies/", response_model=MovieResponse, tags=["write"])
 async def create_movie(
     movie: MovieCreate,
     session: AsyncSession = Depends(get_session),
