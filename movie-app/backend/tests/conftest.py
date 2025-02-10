@@ -1,11 +1,12 @@
 import pytest
 from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from typing import AsyncGenerator
 from app.database import get_session
 from app.main import app
 from loguru import logger
+
 
 # Configuración de la base de datos de prueba
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -53,11 +54,8 @@ async def test_session(async_engine) -> AsyncGenerator[AsyncSession, None]:
 async def client() -> AsyncGenerator[AsyncClient, None]:
     """Crear un cliente de prueba para la aplicación FastAPI."""
     logger.info("Creating test client")
-    async with AsyncClient(
-        app=app,
-        base_url="http://test",
-        backend="httpx"
-    ) as ac:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     logger.info("Test client closed")
 
