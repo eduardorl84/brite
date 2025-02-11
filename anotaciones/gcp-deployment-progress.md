@@ -26,6 +26,15 @@ gcloud services enable \
   secretmanager.googleapis.com \
   sqladmin.googleapis.com
 ```
+### 4. Configuración de Cloud SQL (PostgreSQL)
+
+gcloud sql instances create movie-db \
+  --database-version=POSTGRES_13 \
+  --tier=db-f1-micro \
+  --region=us-central1 \
+  --root-password=3rVIB8sVQfX2|YaZa57a
+
+
 
 ## Próximos Pasos Pendientes
 
