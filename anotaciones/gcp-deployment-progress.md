@@ -28,17 +28,27 @@ gcloud services enable \
 ```
 ### 4. Configuración de Cloud SQL (PostgreSQL)
 
-gcloud sql instances create movie-db \
+gcloud sql instances create movie-db-prod \
   --database-version=POSTGRES_13 \
   --tier=db-f1-micro \
   --region=us-central1 \
   --root-password=3rVIB8sVQfX2aYaZa57a
 
+### 5. Configuración de Cloud SQL (PostgreSQL)
 
+#### Crear la base de datos
+
+gcloud sql databases create moviedb --instance=movie-db-prod
+
+#### Crear usuario para la aplicación
+
+gcloud sql users create movie-user \
+  --instance=movie-db-prod \
+  --password=movieUser2025Secure
 
 ## Próximos Pasos Pendientes
 
-- [ ] Configuración de Cloud SQL (PostgreSQL)
+
 - [ ] Configuración de Secret Manager
 - [ ] Preparación del Dockerfile
 - [ ] Configuración de variables de entorno
