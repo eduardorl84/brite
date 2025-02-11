@@ -1,3 +1,0 @@
-reflex
-python-dotenv
-httpx
