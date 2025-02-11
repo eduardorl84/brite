@@ -144,10 +144,6 @@ version: 1
 ```
 
 
-
-
-
-
 ## Próximos Pasos Pendientes
 
 - [ ] Preparación del Dockerfile
