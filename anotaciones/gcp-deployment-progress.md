@@ -143,12 +143,10 @@ etag: BwYt4x80Gao=
 version: 1
 ```
 
-los tres puntos siguentes hacen referencia al codigo mostrado a continuación.
+los dos puntos siguentes hacen referencia al codigo mostrado a continuación.
 
 #### Preparación del Dockerfile
 #### Configuración de variables de entorno
-#### Despliegue en Cloud Run
-
 
 ```shell
 eduardo@erl-portatil:~/Proyectos/brite/movie-app/backend$ gcloud builds submit --tag gcr.io/$(gcloud config get-value project)/movie-backend
@@ -727,12 +725,404 @@ ID                                    CREATE_TIME                DURATION  SOURC
 0fdc98cd-200a-4312-a6ab-829049eb1975  2025-02-11T20:53:49+00:00  1M31S     gs://brite-450618_cloudbuild/source/1739307201.750908-534e0ae3df7947ca947b84acd0d7c05a.tgz  gcr.io/brite-450618/movie-backend (+1 more)  SUCCESS
 ```
 
+#### Despliegue en Cloud Run
+
+```
+# Primero, volvemos a configurar la variable SERVICE_ACCOUNT
+export SERVICE_ACCOUNT="movie-backend-sa@$(gcloud config get-value project).iam.gserviceaccount.com"
+
+# Ahora sí, el comando de despliegue
+gcloud run deploy movie-backend \
+  --image gcr.io/$(gcloud config get-value project)/movie-backend \
+  --platform managed \
+  --region us-central1 \
+  --env-vars-file .env.yaml \
+  --add-cloudsql-instances $(gcloud config get-value project):us-central1:movie-db-prod \
+  --service-account "${SERVICE_ACCOUNT}" \
+  --allow-unauthenticated
+```
+
+#### dar permisos en IAM para ver los logs y consultar el error:
+
+```shell
+eduardo@erl-portatil:~/Proyectos/brite/movie-app/backend$ USER_EMAIL=$(gcloud config get-value account)
+eduardo@erl-portatil:~/Proyectos/brite/movie-app/backend$ gcloud projects add-iam-policy-binding $(gcloud config get-value project) \
+    --member="user:${USER_EMAIL}" \
+    --role="roles/logging.viewer"
+Updated IAM policy for project [brite-450618].
+bindings:
+- members:
+  - serviceAccount:service-58302029113@gcp-sa-artifactregistry.iam.gserviceaccount.com
+  role: roles/artifactregistry.serviceAgent
+- members:
+  - serviceAccount:58302029113@cloudbuild.gserviceaccount.com
+  role: roles/cloudbuild.builds.builder
+- members:
+  - serviceAccount:service-58302029113@gcp-sa-cloudbuild.iam.gserviceaccount.com
+  role: roles/cloudbuild.serviceAgent
+- members:
+  - serviceAccount:movie-backend-sa@brite-450618.iam.gserviceaccount.com
+  role: roles/cloudsql.client
+- members:
+  - serviceAccount:service-58302029113@containerregistry.iam.gserviceaccount.com
+  role: roles/containerregistry.ServiceAgent
+- members:
+  - serviceAccount:58302029113-compute@developer.gserviceaccount.com
+  role: roles/editor
+- members:
+  - user:IngTecEduardo@gmail.com
+  role: roles/logging.viewer
+- members:
+  - user:IngTecEduardo@gmail.com
+  role: roles/owner
+- members:
+  - serviceAccount:service-58302029113@gcp-sa-pubsub.iam.gserviceaccount.com
+  role: roles/pubsub.serviceAgent
+- members:
+  - serviceAccount:service-58302029113@serverless-robot-prod.iam.gserviceaccount.com
+  role: roles/run.serviceAgent
+etag: BwYt5FQolq4=
+version: 1
+eduardo@erl-portatil:~/Proyectos/brite/movie-app/backend$ # Añadir el rol de visor de Cloud Run
+gcloud projects add-iam-policy-binding $(gcloud config get-value project) \
+    --member="user:${USER_EMAIL}" \
+    --role="roles/run.viewer"
+Updated IAM policy for project [brite-450618].
+bindings:
+- members:
+  - serviceAccount:service-58302029113@gcp-sa-artifactregistry.iam.gserviceaccount.com
+  role: roles/artifactregistry.serviceAgent
+- members:
+  - serviceAccount:58302029113@cloudbuild.gserviceaccount.com
+  role: roles/cloudbuild.builds.builder
+- members:
+  - serviceAccount:service-58302029113@gcp-sa-cloudbuild.iam.gserviceaccount.com
+  role: roles/cloudbuild.serviceAgent
+- members:
+  - serviceAccount:movie-backend-sa@brite-450618.iam.gserviceaccount.com
+  role: roles/cloudsql.client
+- members:
+  - serviceAccount:service-58302029113@containerregistry.iam.gserviceaccount.com
+  role: roles/containerregistry.ServiceAgent
+- members:
+  - serviceAccount:58302029113-compute@developer.gserviceaccount.com
+  role: roles/editor
+- members:
+  - user:IngTecEduardo@gmail.com
+  role: roles/logging.viewer
+- members:
+  - user:IngTecEduardo@gmail.com
+  role: roles/owner
+- members:
+  - serviceAccount:service-58302029113@gcp-sa-pubsub.iam.gserviceaccount.com
+  role: roles/pubsub.serviceAgent
+- members:
+  - serviceAccount:service-58302029113@serverless-robot-prod.iam.gserviceaccount.com
+  role: roles/run.serviceAgent
+- members:
+  - user:IngTecEduardo@gmail.com
+  role: roles/run.viewer
+etag: BwYt5FVUzSg=
+version: 1
+eduardo@erl-portatil:~/Proyectos/brite/movie-app/backend$ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=movie-backend AND severity>=ERROR" --limit=10
+---
+insertId: 5ul8h1d878w
+logName: projects/brite-450618/logs/cloudaudit.googleapis.com%2Fsystem_event
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  methodName: /Services.CreateService
+  resourceName: namespaces/brite-450618/services/movie-backend
+  response:
+    '@type': type.googleapis.com/google.cloud.run.v1.Service
+    apiVersion: serving.knative.dev/v1
+    kind: Service
+    metadata:
+      annotations:
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 510.0.0
+        run.googleapis.com/ingress: all
+        run.googleapis.com/ingress-status: all
+        run.googleapis.com/operation-id: 7461bed3-3afa-4793-a884-04363377da6d
+        run.googleapis.com/urls: '["https://movie-backend-58302029113.us-central1.run.app"]'
+        serving.knative.dev/creator: IngTecEduardo@gmail.com
+        serving.knative.dev/lastModifier: IngTecEduardo@gmail.com
+      creationTimestamp: '2025-02-11T21:08:27.738689Z'
+      generation: 1
+      labels:
+        cloud.googleapis.com/location: us-central1
+      name: movie-backend
+      namespace: '58302029113'
+      resourceVersion: AAYt5D650hQ
+      selfLink: /apis/serving.knative.dev/v1/namespaces/58302029113/services/movie-backend
+      uid: 8e36e34f-96da-4bfc-87a3-ed6eafee9cbc
+    spec:
+      template:
+        metadata:
+          annotations:
+            autoscaling.knative.dev/maxScale: '100'
+            run.googleapis.com/client-name: gcloud
+            run.googleapis.com/client-version: 510.0.0
+            run.googleapis.com/cloudsql-instances: brite-450618:us-central1:movie-db-prod
+            run.googleapis.com/startup-cpu-boost: 'true'
+          labels:
+            client.knative.dev/nonce: temopypbjj
+            run.googleapis.com/startupProbeType: Default
+        spec:
+          containerConcurrency: 80
+          containers:
+          - env:
+            - name: DATABASE_URL
+              value: postgresql+asyncpg://movie-user:movieUser2025Secure@/moviedb?host=/cloudsql/$(gcloud
+                config get-value project):us-central1:movie-db-prod
+            - name: GOOGLE_CLOUD_PROJECT
+              value: $(gcloud config get-value project)
+            - name: OMDB_API_KEY
+              value: cfd81034
+            image: gcr.io/brite-450618/movie-backend
+            ports:
+            - containerPort: 8080
+              name: http1
+            resources:
+              limits:
+                cpu: 1000m
+                memory: 512Mi
+            startupProbe:
+              failureThreshold: 1
+              periodSeconds: 240
+              tcpSocket:
+                port: 8080
+              timeoutSeconds: 240
+          serviceAccountName: movie-backend-sa@brite-450618.iam.gserviceaccount.com
+          timeoutSeconds: 300
+      traffic:
+      - latestRevision: true
+        percent: 100
+    status:
+      conditions:
+      - lastTransitionTime: '2025-02-11T21:09:48.353844Z'
+        message: |-
+          Revision 'movie-backend-00001-qwd' is not ready and cannot serve traffic. The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=brite-450618&resource=cloud_run_revision/service_name/movie-backend/revision_name/movie-backend-00001-qwd&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22movie-backend%22%0Aresource.labels.revision_name%3D%22movie-backend-00001-qwd%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: Ready
+      - lastTransitionTime: '2025-02-11T21:09:48.352355Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=brite-450618&resource=cloud_run_revision/service_name/movie-backend/revision_name/movie-backend-00001-qwd&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22movie-backend%22%0Aresource.labels.revision_name%3D%22movie-backend-00001-qwd%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        status: 'True'
+        type: ConfigurationsReady
+      - lastTransitionTime: '2025-02-11T21:09:48.353844Z'
+        message: |-
+          Revision 'movie-backend-00001-qwd' is not ready and cannot serve traffic. The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=brite-450618&resource=cloud_run_revision/service_name/movie-backend/revision_name/movie-backend-00001-qwd&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22movie-backend%22%0Aresource.labels.revision_name%3D%22movie-backend-00001-qwd%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: RoutesReady
+      latestCreatedRevisionName: movie-backend-00001-qwd
+      observedGeneration: 1
+  serviceName: run.googleapis.com
+  status:
+    code: 9
+    message: |-
+      Ready condition status changed to False for Service movie-backend with message: Revision 'movie-backend-00001-qwd' is not ready and cannot serve traffic. The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+      Logs URL: https://console.cloud.google.com/logs/viewer?project=brite-450618&resource=cloud_run_revision/service_name/movie-backend/revision_name/movie-backend-00001-qwd&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22movie-backend%22%0Aresource.labels.revision_name%3D%22movie-backend-00001-qwd%22 
+      For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+receiveTimestamp: '2025-02-11T21:09:49.241272573Z'
+resource:
+  labels:
+    configuration_name: ''
+    location: us-central1
+    project_id: brite-450618
+    revision_name: ''
+    service_name: movie-backend
+  type: cloud_run_revision
+severity: ERROR
+timestamp: '2025-02-11T21:09:48.435101Z'
+---
+insertId: -63bkgod4xdm
+logName: projects/brite-450618/logs/cloudaudit.googleapis.com%2Fsystem_event
+protoPayload:
+  '@type': type.googleapis.com/google.cloud.audit.AuditLog
+  methodName: /Services.CreateService
+  resourceName: namespaces/brite-450618/revisions/movie-backend-00001-qwd
+  response:
+    '@type': type.googleapis.com/google.cloud.run.v1.Revision
+    apiVersion: serving.knative.dev/v1
+    kind: Revision
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '100'
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 510.0.0
+        run.googleapis.com/cloudsql-instances: brite-450618:us-central1:movie-db-prod
+        run.googleapis.com/operation-id: 7461bed3-3afa-4793-a884-04363377da6d
+        run.googleapis.com/startup-cpu-boost: 'true'
+        serving.knative.dev/creator: IngTecEduardo@gmail.com
+      creationTimestamp: '2025-02-11T21:08:28.001054Z'
+      generation: 1
+      labels:
+        client.knative.dev/nonce: temopypbjj
+        cloud.googleapis.com/location: us-central1
+        run.googleapis.com/startupProbeType: Default
+        serving.knative.dev/configuration: movie-backend
+        serving.knative.dev/configurationGeneration: '1'
+        serving.knative.dev/route: movie-backend
+        serving.knative.dev/service: movie-backend
+        serving.knative.dev/serviceUid: 8e36e34f-96da-4bfc-87a3-ed6eafee9cbc
+      name: movie-backend-00001-qwd
+      namespace: '58302029113'
+      ownerReferences:
+      - apiVersion: serving.knative.dev/v1
+        blockOwnerDeletion: true
+        controller: true
+        kind: Configuration
+        name: movie-backend
+        uid: e019fd52-c66d-4b90-83e6-6092bace90fb
+      resourceVersion: AAYt5D64Ip0
+      selfLink: /apis/serving.knative.dev/v1/namespaces/58302029113/revisions/movie-backend-00001-qwd
+      uid: 99824965-d142-44b4-bf3e-677509d48bdf
+    spec:
+      containerConcurrency: 80
+      containers:
+      - env:
+        - name: DATABASE_URL
+          value: postgresql+asyncpg://movie-user:movieUser2025Secure@/moviedb?host=/cloudsql/$(gcloud
+            config get-value project):us-central1:movie-db-prod
+        - name: GOOGLE_CLOUD_PROJECT
+          value: $(gcloud config get-value project)
+        - name: OMDB_API_KEY
+          value: cfd81034
+        image: gcr.io/brite-450618/movie-backend@sha256:6c2233147677fa9eb19917ed822c3feda3b06fedce6a9ee3edc27b4ee13ccaf9
+        name: movie-backend-1
+        ports:
+        - containerPort: 8080
+          name: http1
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        startupProbe:
+          failureThreshold: 1
+          periodSeconds: 240
+          tcpSocket:
+            port: 8080
+          timeoutSeconds: 240
+      serviceAccountName: movie-backend-sa@brite-450618.iam.gserviceaccount.com
+      timeoutSeconds: 300
+    status:
+      conditions:
+      - lastTransitionTime: '2025-02-11T21:09:48.312221Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=brite-450618&resource=cloud_run_revision/service_name/movie-backend/revision_name/movie-backend-00001-qwd&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22movie-backend%22%0Aresource.labels.revision_name%3D%22movie-backend-00001-qwd%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: Ready
+      - lastTransitionTime: '2025-02-11T21:09:48.312221Z'
+        message: |-
+          The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+          Logs URL: https://console.cloud.google.com/logs/viewer?project=brite-450618&resource=cloud_run_revision/service_name/movie-backend/revision_name/movie-backend-00001-qwd&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22movie-backend%22%0Aresource.labels.revision_name%3D%22movie-backend-00001-qwd%22 
+          For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+        reason: HealthCheckContainerError
+        status: 'False'
+        type: ContainerHealthy
+      - lastTransitionTime: '2025-02-11T21:09:36.703763Z'
+        message: Container image import completed in 4.76s.
+        status: 'True'
+        type: ContainerReady
+      - lastTransitionTime: '2025-02-11T21:09:39.920072Z'
+        message: Provisioning imported containers completed in 3.21s. Checking container
+          health.
+        status: 'True'
+        type: ResourcesAvailable
+      - lastTransitionTime: '2025-02-11T21:09:39.920072Z'
+        message: System will retry after 0:00:00 from lastTransitionTime for attempt
+          0.
+        reason: ImmediateRetry
+        severity: Info
+        status: 'True'
+        type: Retry
+      containerStatuses:
+      - imageDigest: gcr.io/brite-450618/movie-backend@sha256:6c2233147677fa9eb19917ed822c3feda3b06fedce6a9ee3edc27b4ee13ccaf9
+        name: movie-backend-1
+      imageDigest: gcr.io/brite-450618/movie-backend@sha256:6c2233147677fa9eb19917ed822c3feda3b06fedce6a9ee3edc27b4ee13ccaf9
+      logUrl: https://console.cloud.google.com/logs/viewer?project=brite-450618&resource=cloud_run_revision/service_name/movie-backend/revision_name/movie-backend-00001-qwd&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22movie-backend%22%0Aresource.labels.revision_name%3D%22movie-backend-00001-qwd%22
+      observedGeneration: 1
+  serviceName: run.googleapis.com
+  status:
+    code: 9
+    message: |-
+      Ready condition status changed to False for Revision movie-backend-00001-qwd with message: The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout. This can happen when the container port is misconfigured or if the timeout is too short. The health check timeout can be extended. Logs for this revision might contain more information.
+
+      Logs URL: https://console.cloud.google.com/logs/viewer?project=brite-450618&resource=cloud_run_revision/service_name/movie-backend/revision_name/movie-backend-00001-qwd&advancedFilter=resource.type%3D%22cloud_run_revision%22%0Aresource.labels.service_name%3D%22movie-backend%22%0Aresource.labels.revision_name%3D%22movie-backend-00001-qwd%22 
+      For more troubleshooting guidance, see https://cloud.google.com/run/docs/troubleshooting#container-failed-to-start
+receiveTimestamp: '2025-02-11T21:09:48.520749775Z'
+resource:
+  labels:
+    configuration_name: movie-backend
+    location: us-central1
+    project_id: brite-450618
+    revision_name: movie-backend-00001-qwd
+    service_name: movie-backend
+  type: cloud_run_revision
+severity: ERROR
+timestamp: '2025-02-11T21:09:48.323811Z'
+---
+insertId: 67abbc9c0004c5fc1f695b07
+labels:
+  instanceId: 00fd7d733742a1f6e84c8b238d1a3fcdb4182f00da92965ea110992f89ef402a837cbbf9162283dbb80d350c8f019924249c3094d896c459bcaa8a5d7b28af322f64a9671f
+logName: projects/brite-450618/logs/run.googleapis.com%2Fvarlog%2Fsystem
+receiveTimestamp: '2025-02-11T21:09:48.448461674Z'
+resource:
+  labels:
+    configuration_name: movie-backend
+    location: us-central1
+    project_id: brite-450618
+    revision_name: movie-backend-00001-qwd
+    service_name: movie-backend
+  type: cloud_run_revision
+severity: ERROR
+textPayload: Default STARTUP TCP probe failed 1 time consecutively for container "movie-backend-1"
+  on port 8080. The instance was not started.
+timestamp: '2025-02-11T21:09:48.312828Z'
+---
+errorGroups:
+- id: COmHscWixaGTQg
+insertId: 67abbc9b00019be89bae4d13
+labels:
+  instanceId: 00fd7d733742a1f6e84c8b238d1a3fcdb4182f00da92965ea110992f89ef402a837cbbf9162283dbb80d350c8f019924249c3094d896c459bcaa8a5d7b28af322f64a9671f
+logName: projects/brite-450618/logs/run.googleapis.com%2Fvarlog%2Fsystem
+receiveTimestamp: '2025-02-11T21:09:47.108771686Z'
+resource:
+  labels:
+    configuration_name: movie-backend
+    location: us-central1
+    project_id: brite-450618
+    revision_name: movie-backend-00001-qwd
+    service_name: movie-backend
+  type: cloud_run_revision
+severity: ERROR
+textPayload: 'Cloud SQL instance "$(gcloud config get-value project):us-central1:movie-db-prod"
+  is not reachable. Deploy a new revision adding the Cloud SQL connection. See documentation:
+  https://cloud.google.com/sql/docs/mysql/connect-run'
+timestamp: '2025-02-11T21:09:47.105448Z'
+```
+
+
 
 ## Próximos Pasos Pendientes
 
-- [ ] Preparación del Dockerfile
-- [ ] Configuración de variables de entorno
-- [ ] Despliegue en Cloud Run
 - [ ] Verificación del despliegue
 - [ ] Configuración de monitoreo y logs
 
